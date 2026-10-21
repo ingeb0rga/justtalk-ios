@@ -1,0 +1,18 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Swift Package Manager
+.build/
+# Package.resolved коммитим — фиксирует версии SPM-зависимостей
+
+# Модели sherpa-onnx (крупные, в репо не хранить; живут только на iPhone
+# в Documents/models). НЕ трогать исходники JustTalk/Models/ — это код.
+*.onnx
+*.ort
+*.tar.bz2
+
+# Системное
+.DS_Store
