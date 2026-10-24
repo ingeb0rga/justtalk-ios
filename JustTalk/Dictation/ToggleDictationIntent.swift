@@ -30,13 +30,16 @@ struct ToggleDictationIntent: AudioRecordingIntent, LiveActivityIntent {
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         // Прямой тоггл контроллера. Без диалогов — баннер
         // диалога рисует системную кнопку «Готово»; фидбек дают
-        // Live Activity и уведомления (этап 6).
+        // Live Activity в Dynamic Island (уведомлений нет).
         let controller = DictationController.shared
         switch controller.state {
         case .recording:
             let text = await controller.stopAndTranscribe()
             return .result(value: text)
         case .idle, .busy:
+            // Прошлый процесс убит посреди записи — этот тап пользователь
+            // жмёт как «стоп»: не начинать новую запись.
+            if controller.consumeInterruptedRecording() { break }
             try await controller.startDictation()
         }
         return .result(value: "")

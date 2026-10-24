@@ -38,6 +38,10 @@ struct StopDictationIntent: LiveActivityIntent {
         let controller = DictationController.shared
         if controller.state == .recording {
             await controller.stopAndTranscribe()
+        } else {
+            // Записи в этом процессе нет — активность осталась от убитого
+            // процесса: просто убрать её из шторки.
+            controller.endStaleActivities()
         }
 #else
         // Extension: сигнал приложению.

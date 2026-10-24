@@ -53,8 +53,19 @@ nonisolated final class SherpaTranscriber: Transcriber, @unchecked Sendable {
 
     /// Блокирующий вызов — только из фонового потока/задачи.
     func transcribe(_ samples: [Float], sampleRate: Int = 16000) -> String {
-        recognizer.decode(samples: samples, sampleRate: sampleRate)
-            .text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        Self.stripQwenMarkup(recognizer.decode(samples: samples, sampleRate: sampleRate).text)
+    }
+
+    /// Qwen3-ASR иногда отдаёт сырой вывод с разметкой:
+    /// «language Russian<asr_text>Текст.</asr_text>» — оставляем только текст.
+    static func stripQwenMarkup(_ raw: String) -> String {
+        var text = raw
+        if let open = text.range(of: "<asr_text>", options: .backwards) {
+            text = String(text[open.upperBound...])
+        }
+        if let close = text.range(of: "</asr_text>") {
+            text = String(text[..<close.lowerBound])
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
