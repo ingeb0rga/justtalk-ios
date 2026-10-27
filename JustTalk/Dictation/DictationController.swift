@@ -90,6 +90,11 @@ final class DictationController {
         }
     }
 
+    /// Ошибка старта — в Dynamic Island вместо системного баннера «Команд».
+    func showStartFailure(_ error: Error) {
+        showOneShotActivity(.failed, message: error.localizedDescription)
+    }
+
     /// Тап после гибели прошлого процесса: сообщить и не начинать запись.
     /// true — тап поглощён.
     func consumeInterruptedRecording() -> Bool {
@@ -186,9 +191,13 @@ final class DictationController {
         if inBackground, let activityError {
             throw DictationError.recordingFailed("Live Activity не запустилась: \(activityError)")
         }
-        // Alert «Запись началась» iOS на старте не показывает (журнал: ни
-        // сразу после request, ни через 1,2 с, ни во время записи) —
-        // alert'ов нет совсем, статус только в компактном острове.
+        // iOS 27.2: микрофон сразу после Activity.request — AppIntents
+        // иногда не успевает увидеть активность и роняет процесс
+        // («AudioRecordingIntent was performed with an active audio session
+        // but without a Live Activity»). Пауза до активации аудиосессии.
+        if activityError == nil {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+        }
         Self.debugLog("mic start")
         do {
             let rec = Recorder()
@@ -215,11 +224,6 @@ final class DictationController {
         timingText = ""
         toast = nil
 
-        // Первые 2 с — фаза .started («Запись» в компактном острове), потом таймер.
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            if state == .recording { updateActivity(.recording) }
-        }
         if UIApplication.shared.applicationState == .active {
             toast = DictationToast(text: "Запись начата", kind: .info)
             Task {
@@ -238,7 +242,9 @@ final class DictationController {
 
         let recorded = rec.stop()
         Self.debugLog(Self.audioStats(recorded.samples, sampleRate: recorded.sampleRate))
-        updateActivity(.transcribing)
+        // Кольцо в острове: оценка времени распознавания (журнал: ~0,4 × длина + 1,5 с).
+        let audioSeconds = recorded.sampleRate > 0 ? Double(recorded.samples.count) / recorded.sampleRate : 0
+        updateActivity(.transcribing, until: Date().addingTimeInterval(audioSeconds * 0.4 + 1.5))
         var outcomeText = ""
         var failure: String?
 
@@ -354,7 +360,7 @@ final class DictationController {
         }
         let attributes = DictationActivityAttributes()
         let content = ActivityContent(
-            state: DictationActivityAttributes.ContentState(startedAt: Date(), phase: .started),
+            state: DictationActivityAttributes.ContentState(startedAt: Date(), phase: .recording),
             staleDate: nil
         )
         do {
@@ -388,11 +394,14 @@ final class DictationController {
     /// Смена надписи в Dynamic Island (startedAt сохраняется для таймера).
     /// Без alert: iOS не разворачивала остров на старте записи, а без
     /// надписи о старте развёрнутые надписи на финише смысла не имеют.
-    private func updateActivity(_ phase: DictationActivityAttributes.Phase, message: String? = nil) {
+    private func updateActivity(
+        _ phase: DictationActivityAttributes.Phase, message: String? = nil, until: Date? = nil
+    ) {
         guard let activity else { return }
         var state = activity.content.state
         state.phase = phase
         state.message = message
+        state.until = until
         Task { await activity.update(ActivityContent(state: state, staleDate: nil)) }
     }
 

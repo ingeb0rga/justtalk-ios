@@ -2,9 +2,10 @@
 //  JustTalkWidgetBundle.swift
 //  JustTalkWidget
 //
-//  Widget extension: Live Activity диктовки (этап 5).
-//  Dynamic Island и экран блокировки показывают фазу: «Запись началась» →
-//  таймер → «Распознаю» → «Скопировано» / ошибка. Stop — только пока идёт запись.
+//  Widget extension: Live Activity диктовки (этап 5). Без текста:
+//  запись — таймер, распознавание — кольцо, итог — галочка (или ⚠).
+//  Развёрнутый остров и экран блокировки показывают то же самое
+//  (развернуть остров iOS может сама, отключить это нельзя).
 //
 
 import WidgetKit
@@ -18,9 +19,9 @@ struct JustTalkWidgetBundle: WidgetBundle {
     }
 }
 
-private typealias Phase = DictationActivityAttributes.Phase
+private typealias State = DictationActivityAttributes.ContentState
 
-private extension Phase {
+private extension DictationActivityAttributes.Phase {
     var tint: Color {
         switch self {
         case .started, .recording: .red
@@ -31,19 +32,39 @@ private extension Phase {
     }
 }
 
-/// Таймер записи или короткая надпись фазы.
-private struct StatusText: View {
-    let state: DictationActivityAttributes.ContentState
-    var short = false
+/// Значок фазы.
+private struct PhaseIcon: View {
+    let state: State
 
     var body: some View {
-        if state.phase == .recording {
+        Image(systemName: state.phase.symbol)
+            .foregroundStyle(state.phase.tint)
+    }
+}
+
+/// Правая часть: таймер записи, кольцо распознавания или ничего.
+private struct PhaseStatus: View {
+    let state: State
+
+    var body: some View {
+        switch state.phase {
+        case .started, .recording:
             Text(timerInterval: state.startedAt...Date.distantFuture, countsDown: false)
                 .monospacedDigit()
-        } else {
-            Text(short ? state.phase.shortTitle : state.phase.title)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(state.phase.tint)
+        case .transcribing:
+            let start = Date()
+            ProgressView(
+                timerInterval: start...max(state.until ?? start.addingTimeInterval(5), start.addingTimeInterval(1)),
+                countsDown: false,
+                label: { EmptyView() },
+                currentValueLabel: { EmptyView() }
+            )
+            .progressViewStyle(.circular)
+            .tint(state.phase.tint)
+        case .done, .failed, .interrupted:
+            EmptyView()
         }
     }
 }
@@ -61,28 +82,14 @@ private struct StopButton: View {
 struct DictationActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: DictationActivityAttributes.self) { context in
-            // Lock screen / баннер
+            // Экран блокировки / шторка
             let state = context.state
             HStack(spacing: 12) {
-                Image(systemName: state.phase.symbol)
-                    .foregroundStyle(state.phase.tint)
+                PhaseIcon(state: state)
                     .font(.title2)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(state.phase.title)
-                        .font(.subheadline).bold()
-                    if state.phase.isRecording {
-                        Text(timerInterval: state.startedAt...Date.distantFuture, countsDown: false)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    } else if let message = state.message {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer()
+                PhaseStatus(state: state)
+                    .font(.title3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if state.phase.isRecording {
                     StopButton()
                 }
@@ -93,43 +100,28 @@ struct DictationActivityWidget: Widget {
             let state = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: state.phase.symbol)
-                        .foregroundStyle(state.phase.tint)
+                    PhaseIcon(state: state)
+                        .font(.title2)
+                        .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(state.phase.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                    PhaseStatus(state: state)
+                        .font(.title3)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if state.phase.isRecording {
                         StopButton()
+                            .padding(.trailing, 6)
                     }
-                }
-                DynamicIslandExpandedRegion(.bottom) {
-                    Group {
-                        if state.phase.isRecording {
-                            Text(timerInterval: state.startedAt...Date.distantFuture, countsDown: false)
-                                .monospacedDigit()
-                        } else if let message = state.message {
-                            Text(message).lineLimit(2)
-                        }
-                    }
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } compactLeading: {
-                Image(systemName: state.phase.symbol)
-                    .foregroundStyle(state.phase.tint)
+                PhaseIcon(state: state)
             } compactTrailing: {
-                StatusText(state: state, short: true)
+                PhaseStatus(state: state)
                     .font(.caption2)
-                    .foregroundStyle(state.phase.tint)
-                    .frame(maxWidth: 64)
+                    .frame(width: 40)
             } minimal: {
-                Image(systemName: state.phase.symbol)
-                    .foregroundStyle(state.phase.tint)
+                PhaseIcon(state: state)
             }
             .widgetURL(URL(string: "justtalk://dictation"))
         }

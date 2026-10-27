@@ -40,7 +40,13 @@ struct ToggleDictationIntent: AudioRecordingIntent, LiveActivityIntent {
             // Прошлый процесс убит посреди записи — этот тап пользователь
             // жмёт как «стоп»: не начинать новую запись.
             if controller.consumeInterruptedRecording() { break }
-            try await controller.startDictation()
+            do {
+                try await controller.startDictation()
+            } catch {
+                // Не бросаем: «Команды» показали бы баннер с ошибкой.
+                // Статус — только в Dynamic Island.
+                controller.showStartFailure(error)
+            }
         }
         return .result(value: "")
     }

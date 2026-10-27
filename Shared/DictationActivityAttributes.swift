@@ -4,8 +4,8 @@
 //
 //  Атрибуты Live Activity записи (этап 5). Компилируется в приложение
 //  и в widget extension — определения должны совпадать.
-//  Live Activity — единственный канал статуса: уведомлений нет,
-//  надписи («Запись началась», «Распознаю…», «Скопировано») — в Dynamic Island.
+//  Live Activity — единственный канал статуса, без текста: таймер записи,
+//  кольцо распознавания, галочка (или ⚠) в конце.
 //
 
 import ActivityKit
@@ -15,7 +15,8 @@ import Foundation
 /// контекста (SE-0449), изоляция MainActor по умолчанию не подходит.
 nonisolated struct DictationActivityAttributes: ActivityAttributes {
     enum Phase: String, Codable, Hashable {
-        /// Первые секунды записи — надпись «Запись началась».
+        /// Не используется (была надпись «Запись началась»); оставлена для
+        /// декодирования активностей прежних сборок.
         case started
         /// Идёт запись — таймер.
         case recording
@@ -33,11 +34,14 @@ nonisolated struct DictationActivityAttributes: ActivityAttributes {
         var startedAt: Date
         var phase: Phase = .recording
         var message: String?
+        /// Ожидаемый конец распознавания — для кольца прогресса.
+        var until: Date?
 
-        init(startedAt: Date, phase: Phase = .recording, message: String? = nil) {
+        init(startedAt: Date, phase: Phase = .recording, message: String? = nil, until: Date? = nil) {
             self.startedAt = startedAt
             self.phase = phase
             self.message = message
+            self.until = until
         }
 
         /// Терпимо к активностям прежних сборок (без phase/message).
@@ -46,35 +50,12 @@ nonisolated struct DictationActivityAttributes: ActivityAttributes {
             startedAt = try c.decode(Date.self, forKey: .startedAt)
             phase = try c.decodeIfPresent(Phase.self, forKey: .phase) ?? .recording
             message = try c.decodeIfPresent(String.self, forKey: .message)
+            until = try c.decodeIfPresent(Date.self, forKey: .until)
         }
     }
 }
 
 extension DictationActivityAttributes.Phase {
-    /// Короткая надпись для компактного Dynamic Island.
-    var shortTitle: String {
-        switch self {
-        case .started: "Запись"
-        case .recording: "Запись"
-        case .transcribing: "Распознаю"
-        case .done: "Готово"
-        case .failed: "Ошибка"
-        case .interrupted: "Прервано"
-        }
-    }
-
-    /// Полная надпись: развёрнутый остров и экран блокировки.
-    var title: String {
-        switch self {
-        case .started: "Запись началась"
-        case .recording: "Идёт запись"
-        case .transcribing: "Запись закончилась, распознаю…"
-        case .done: "Скопировано в буфер обмена"
-        case .failed: "Не удалось распознать"
-        case .interrupted: "Запись прервалась"
-        }
-    }
-
     var symbol: String {
         switch self {
         case .started, .recording: "mic.fill"
