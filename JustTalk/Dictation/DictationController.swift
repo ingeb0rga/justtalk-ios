@@ -36,7 +36,7 @@ enum DictationError: LocalizedError {    case modelNotReady
     var errorDescription: String? {
         switch self {
         case .notEnoughMemory(let needed, let available):
-            String(format: "Модели не хватит памяти: нужно ≈%.1f ГБ, iOS даёт %.1f ГБ. Выберите 0.6B в настройках.",
+            String(format: "Модели не хватит памяти: нужно ≈%.1f ГБ, iOS даёт %.1f ГБ. Выберите модель полегче в настройках.",
                    Double(needed) / 1e9, Double(available) / 1e9)
         case .modelNotReady: "Модель не найдена — скопируйте её в Documents/models/."
         case .engineFailed: "Не удалось загрузить движок распознавания."
@@ -69,7 +69,7 @@ final class DictationController {
     /// новая запись: пользователь думает, что запись ещё идёт.
     private var interruptedRecording = false
 
-    private var probedFiles: Qwen3ModelFiles?
+    private var probedFiles: ModelFiles?
     private var recorder: Recorder?
     private var engineTask: Task<SherpaTranscriber, Error>?
     private var activity: Activity<DictationActivityAttributes>?
@@ -142,8 +142,8 @@ final class DictationController {
 
     /// Пиковая память движка: файлы модели × 1,5 (на устройстве 1.7B,
     /// 2,3 ГБ файлов, дошла до 3,4 ГБ и была убита по лимиту).
-    nonisolated private static func estimatedEngineMemory(_ files: Qwen3ModelFiles) -> Int64 {
-        let bytes = [files.convFrontend, files.encoder, files.decoder].reduce(Int64(0)) { sum, url in
+    nonisolated private static func estimatedEngineMemory(_ files: ModelFiles) -> Int64 {
+        let bytes = files.onnxFiles.reduce(Int64(0)) { sum, url in
             let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
             return sum + ((attrs?[.size] as? Int64) ?? 0)
         }

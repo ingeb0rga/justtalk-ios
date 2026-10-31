@@ -4,8 +4,8 @@
 //
 //  Widget extension: Live Activity диктовки (этап 5). Без текста:
 //  запись — таймер, распознавание — кольцо, итог — галочка (или ⚠).
-//  Развёрнутый остров и экран блокировки показывают то же самое
-//  (развернуть остров iOS может сама, отключить это нельзя).
+//  Развёрнутый остров — одна строка (значок, таймер, «Стоп»): развернуть
+//  его iOS может сама, отключить это нельзя.
 //
 
 import WidgetKit
@@ -99,19 +99,24 @@ struct DictationActivityWidget: Widget {
         } dynamicIsland: { context in
             let state = context.state
             return DynamicIsland {
+                // Развернуть остров iOS может сама (при старте, по долгому
+                // нажатию) — запретить нельзя. Поэтому одна низкая строка на
+                // уровне камеры: слева значок + таймер/кольцо, справа «Стоп».
                 DynamicIslandExpandedRegion(.leading) {
-                    PhaseIcon(state: state)
-                        .font(.title2)
-                        .padding(.leading, 6)
-                }
-                DynamicIslandExpandedRegion(.center) {
-                    PhaseStatus(state: state)
-                        .font(.title3)
+                    HStack(spacing: 8) {
+                        PhaseIcon(state: state)
+                        PhaseStatus(state: state)
+                            .frame(width: 56, alignment: .leading)
+                    }
+                    .font(.title3)
+                    .padding(.leading, 8)
+                    .frame(maxHeight: .infinity)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if state.phase.isRecording {
                         StopButton()
-                            .padding(.trailing, 6)
+                            .padding(.trailing, 8)
+                            .frame(maxHeight: .infinity)
                     }
                 }
             } compactLeading: {

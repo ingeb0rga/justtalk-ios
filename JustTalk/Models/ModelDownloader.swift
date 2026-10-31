@@ -95,7 +95,7 @@ final class ModelDownloader {
         let fm = FileManager.default
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let files = ModelVariant.modelFiles
+        let files = variant.downloadFiles
         func remoteURL(_ relativePath: String) -> URL {
             URL(string: "https://huggingface.co/\(variant.hfRepo)/resolve/main/\(relativePath)")!
         }
